@@ -20,7 +20,7 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-
+#define _GNU_SOURCE
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -38,6 +38,7 @@
 #include "xrp_kernel_defs.h"
 #include "xrp_report.h"
 #include "dsp_common.h"
+// #include "csi_dsp_task_defs.h"
 struct xrp_request {
 	struct xrp_queue_item q;
 	void *in_data;
@@ -257,19 +258,81 @@ void xrp_enqueue_command(struct xrp_queue *queue,
 }
 
 static struct xrp_report *reporter;
+static int report_cnt =0;
 
-void xrp_reporter_sig_handler()
+static void xrp_prcoess_report(struct xrp_report *reporter)
 {
-	// printf("%s\n",__func__);
+
 	struct xrp_report_buffer *report_buffer;
+    // struct timeval start_time,mid_time,current_time;
 	if(!reporter || !reporter->report_buf)
 	{
 		return;
 	}
-	report_buffer = (struct xrp_report_buffer *)reporter->report_buf;
-	// printf("buffer:%lx,id:%d,data:%x,%x,%x,%x\n",report_buffer,report_buffer->report_id,report_buffer->data[0],report_buffer->data[1],report_buffer->data[2],report_buffer->data[3]);
 
-	xrp_process_report(&reporter->list,report_buffer->data,report_buffer->report_id);
+	report_buffer = (struct xrp_report_buffer  *)reporter->report_buf;
+    // gettimeofday(&start_time, 0);
+    while(ioctl(reporter->device->impl.fd, XRP_IOCTL_POP_NEW_REPORT,report_buffer)==0)
+    {
+    
+        // csi_dsp_report_item_t * item = (csi_dsp_report_item_t *)report_buffer->data;
+        // gettimeofday(&mid_time, 0);
+        xrp_process_report(&reporter->list,report_buffer->data,report_buffer->report_id);
+        // gettimeofday(&current_time, 0);
+        report_cnt++;
+        // printf("report_cnt:%d,report %d,process time:(%ld s,%ld us,delta:%ldus),callback:%ldus\n",report_cnt,report_buffer->report_id,
+        //                                start_time.tv_sec,start_time.tv_usec,
+        //                                (current_time.tv_sec-start_time.tv_sec)*1000000+(current_time.tv_usec-start_time.tv_usec),
+        //                                (current_time.tv_sec-mid_time.tv_sec)*1000000+(current_time.tv_usec-mid_time.tv_usec));
+        DSP_PRINT(DEBUG,"report_cnt:%d,report %d\n",report_cnt,report_buffer->report_id);
+    }
+}
+static void xrp_reporter_sig_handler()
+{
+   if(!reporter)
+   {
+        return;
+   }
+   reporter->process_sig =1;
+
+}
+static void *xrp_report_thread(void *p)
+{
+    sigset_t   waitset,oldset;
+
+    struct xrp_report * report_handler =(struct xrp_report *) p;
+    if(report_handler == NULL)
+    {
+        DSP_PRINT(WARNING,"report is not created\n");
+        return NULL;
+    }
+    report_cnt =0;
+    sigemptyset(&waitset);
+    sigaddset(&waitset, SIG_REPORT);
+
+	signal(SIG_REPORT, xrp_reporter_sig_handler); /* sigaction() is better */
+    struct f_owner_ex  owner_ex;
+    owner_ex.pid = gettid();//syscall(SYS_gettid);
+    owner_ex.type = F_OWNER_TID;
+	fcntl(report_handler->device->impl.fd,F_SETOWN_EX, &owner_ex);
+	int oflags = fcntl(report_handler->device->impl.fd, F_GETFL);
+	fcntl(report_handler->device->impl.fd, F_SETFL, oflags | FASYNC);
+    fcntl(report_handler->device->impl.fd, F_SETSIG, SIG_REPORT);
+    DSP_PRINT(INFO,"report thread runing....\n");
+    while(1)
+    {
+        sigprocmask(SIG_BLOCK, &waitset,&oldset);
+        if(report_handler->process_sig)
+        {
+            xrp_prcoess_report(report_handler);
+            report_handler->process_sig = 0;
+        }
+        sigsuspend(&oldset);
+        sigprocmask(SIG_UNBLOCK, &waitset,NULL); 
+
+    }
+     DSP_PRINT(INFO,"report thread exit\n");
+     return NULL;
 }
 
 
@@ -279,17 +342,14 @@ int xrp_add_report_item_with_id(struct xrp_report *report,
 								void* context,
 								size_t data_size)
 {
-	// int id;
-	// // set_status(status, XRP_STATUS_SUCCESS);
-	// id =xrp_alloc_report_id(&report->list);
+
 	if(report_id<0 || !report)
 	{
-		// set_status(status, XRP_STATUS_FAILURE);
 		return -1;
 	}
 	if(data_size>report->buf_size)
 	{
-		//realloc()
+
 		DSP_PRINT(WARNING,"report instance size %d is exceed limit %d\n",data_size,report->buf_size);
 		// set_status(status, XRP_STATUS_FAILURE);
 		return -1;
@@ -333,8 +393,6 @@ int xrp_add_report_item(struct xrp_report *report,
 }
 
 
-
-
 void xrp_remove_report_item(struct xrp_report *report,int report_id)
 {
 	int id;
@@ -348,13 +406,7 @@ void xrp_impl_create_report(struct xrp_device *device,
 				size_t size,
 			    enum xrp_status *status)
 {
-	// char *report_buf = malloc(size+4);
-	// if(!report_buf)
-	// {
-	// 	set_status(status, XRP_STATUS_FAILURE);
-	// 	return;
-	// }
-	
+    sigset_t bset,oset;
 	struct xrp_ioctl_alloc ioctl_alloc = {
 		.addr = (uintptr_t)NULL,
 		.size = size,
@@ -369,21 +421,22 @@ void xrp_impl_create_report(struct xrp_device *device,
 		set_status(status, XRP_STATUS_FAILURE);
 		return;
 	}
-	if(ioctl_alloc.addr ==NULL)
-	{
-		DSP_PRINT(INFO,"alloc report buffer fail\n");
+
+	report->report_buf = malloc(size);
+    if(report->report_buf ==NULL)
+    {
         set_status(status, XRP_STATUS_FAILURE);
-        return ;
-	}
-	report->report_buf = (void *)(uintptr_t)ioctl_alloc.addr;
+		return;
+    }
 	// printf("buf:%lx,report:x\n",ioctl_alloc.addr,report);
 	report->buf_size = size;
 	report->list.queue.head=NULL;
+    report->process_sig =0;
+
 	reporter=report;
-	signal(SIGIO, xrp_reporter_sig_handler); /* sigaction() is better */
-	fcntl(report->device->impl.fd, F_SETOWN, getpid());
-	int oflags = fcntl(report->device->impl.fd, F_GETFL);
-	fcntl(report->device->impl.fd, F_SETFL, oflags | FASYNC);
+
+    xrp_thread_create(&report->report_thread, NULL, xrp_report_thread, report);
+
 	set_status(status, XRP_STATUS_SUCCESS);
 	DSP_PRINT(INFO,"buf:%lx,user space report create\n",ioctl_alloc.addr);
 }
@@ -400,6 +453,12 @@ void xrp_impl_release_report(struct xrp_device *device,
 		set_status(status, XRP_STATUS_FAILURE);
 		return;
 	}
+    xrp_thread_cancel(&report->report_thread);
+    if(!xrp_thread_join(&report->report_thread))
+    {
+        DSP_PRINT(INFO,"report_thread release done\n");
+    }
+    free(report->report_buf);
 	report->report_buf=NULL;
     xrp_release_device(device);
 	set_status(status, XRP_STATUS_SUCCESS);
@@ -435,14 +494,18 @@ void xrp_import_dma_buf(struct xrp_device *device, int fd,enum xrp_access_flags 
         return;
 }
 
-void xrp_release_dma_buf(struct xrp_device *device, int fd,enum xrp_status *status)
+void xrp_release_dma_buf(struct xrp_device *device, int fd,uint64_t user_addr,size_t size,enum xrp_status *status)
 {
+        struct xrp_dma_buf dma_buf;
         if(fd < 0)
         {
             set_status(status, XRP_STATUS_FAILURE);
             return;
         }
-        int ret = ioctl(device->impl.fd, XRP_IOCTL_DMABUF_RELEASE,&fd);
+        dma_buf.fd = fd;
+        dma_buf.addr = user_addr;
+        dma_buf.size = size;
+        int ret = ioctl(device->impl.fd, XRP_IOCTL_DMABUF_RELEASE,&dma_buf);
 
         if (ret < 0) {
             set_status(status, XRP_STATUS_FAILURE);

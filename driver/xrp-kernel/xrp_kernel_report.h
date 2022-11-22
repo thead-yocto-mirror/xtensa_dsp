@@ -29,14 +29,26 @@
 
 // #include "xrp_alloc.h"
 #include <linux/interrupt.h>
+#include "xrp_kernel_defs.h"
+
+#define REPORT_QUEUE_NUM   8
+
+struct xrp_report_ring_buffer{
+    volatile __u32 WR;
+    volatile __u32 RD;
+    volatile bool is_full;
+    __u32  max_item;
+    __u8   data[1];
+};
+
 struct xrp_reporter {
 
     struct fasync_struct *fasync;
 	struct tasklet_struct  report_task;
-	__u64 buffer_virt;
-
+	__u64 buffer_virt; 
 	phys_addr_t buffer_phys;
 	size_t buffer_size;
+    struct xrp_report_ring_buffer  *buffer_list;
 
 };
 

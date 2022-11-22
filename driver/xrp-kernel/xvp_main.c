@@ -56,6 +56,8 @@
 #include <linux/slab.h>
 #include <linux/sort.h>
 #include <linux/timer.h>
+#include <linux/time.h>
+#include <linux/timex.h>
 #include <linux/dma-mapping.h>
 #include <linux/dma-buf.h>
 #include <asm/mman.h>
@@ -704,55 +706,92 @@ static long xrp_ioctl_alloc(struct file *filp,
 	}
 	return 0;
 }
+
+static int report_cnt=0;
 static void xrp_report_tasklet(unsigned long arg)
 {
 	struct xvp *xvp=(struct xvp *)arg;
-		struct xrp_dsp_cmd __iomem *cmd=xvp->comm;
+    struct xrp_dsp_cmd __iomem *cmd=xvp->comm;
 	struct xrp_report_buffer *p_buf = xvp->reporter->buffer_virt;
-	// pr_debug("%s,addr:%lx\n",__func__,arg);
+    struct xrp_report_ring_buffer  *ring_buffer = xvp->reporter->buffer_list;
+    __u32  report_id;
+
 	if(!xvp->reporter->fasync)
 	{
 		pr_debug("%s:fasync is not register in user space\n",__func__);
 		return;
 	}
-	// pr_debug("%s,%d\n",__func__,xvp->reporter->fasync->magic);
-	// if(!xvp->reporter->user_buffer_virt &&
-	// 	!xvp->reporter->buffer_size)
-	// {
-	// 	pr_debug("%s:user_buffer_virt and buffer size is invalid\n",__func__);
-	// 	return;
-	// }
-	// size_t s= xrp_comm_read32(&cmd->report_paylad_size);
+	
+    if((ring_buffer->WR+1)%ring_buffer->max_item == ring_buffer->RD)
+    {
+        /*****if before this flag set ,pop comming, and finish the all sig handler lead no one clear ?? **/
+        // xvp->reporter->buffer_list->is_full =true;
+        pr_err("%s,report queue is full,block the reprot,WR:%d,RD:%d\n",__func__,ring_buffer->WR,ring_buffer->RD);
+        return ;
+    }
 
-	// unsigned int id = xrp_comm_read32(&cmd->report_id);
-	// if(copy_to_user(&p_buf_user->report_id,&id,sizeof(p_buf_user->report_id)));
-	// {
-	// 	pr_debug("%s:copy report id to user fail\n",__func__);
-	// 	return;
-	// }
+    report_id = xrp_comm_read32(&cmd->report_id)&0xffff;
+    // int fd;
+    // fd = xrp_comm_read32(&p_buf->data[8]);
 
-    // if(xvp->reporter->buffer_size>XRP_DSP_CMD_INLINE_DATA_SIZE)
-	// {
-	// 	if(xrp_copy_user_from_phys(xvp,&p_buf_user->data[0],s,xvp->reporter->buffer_phys,XRP_FLAG_READ_WRITE))
-	// 		return;			 
-	// }
-	// else
-	// {
-	// 	char temp_buf[XRP_DSP_CMD_INLINE_DATA_SIZE];
-	// 	xrp_comm_read(&cmd->report_data,temp_buf,s);
-	// 	if(copy_to_user(&p_buf_user->data[0],temp_buf,s))
-	// 	{
-	// 		pr_debug("%s:copy report data to user fail\n",__func__);
-	// 		return;
-	// 	}
-	// }
-	/*****clear report*********************/
-	p_buf->report_id = xrp_comm_read32(&cmd->report_id)&0xffff;
 
-	//xrp_dma_sync_for_cpu(xvp,xvp->reporter->buffer_virt,xvp->reporter->buffer_phys,xvp->reporter->buffer_size,XRP_FLAG_WRITE);	
-	kill_fasync(&(xvp->reporter->fasync), SIGIO, POLL_IN);
-	xrp_comm_write32(&cmd->report_id,0x0);
-    // pr_debug("%s,report_id:%d,report_data:%x\n",__func__,p_buf->report_id,p_buf->data[0]);
+    xrp_comm_write32(&p_buf->report_id,report_id);
+    xrp_comm_read(p_buf,&ring_buffer->data[ring_buffer->WR*xvp->reporter->buffer_size],xvp->reporter->buffer_size);
+    ring_buffer->WR = (ring_buffer->WR+1)%ring_buffer->max_item;
+
+	kill_fasync(&(xvp->reporter->fasync), SIG_REPORT, POLL_IN);
+
+
+    /*******************if  report queue is full block new report************************************************/
+    // if(ring_buffer->WR == ring_buffer->RD)
+    // {
+    //     /*****if before this flag set ,pop comming, and finish the all sig handler lead no one clear ?? **/
+    //     xvp->reporter->buffer_list->is_full =true;
+    //     pr_err("%s,report queue is full,block the reprot\n",__func__);
+    // }else
+    {
+        /*****clear report*********************/
+        xrp_comm_write32(&cmd->report_id,0x0);
+    }
+
+    pr_debug("%s,report_id:%d,report_cnt:%d,WR:%d,RD:%d\n",__func__,p_buf->report_id,++report_cnt,ring_buffer->WR,ring_buffer->RD);
+}
+
+
+static long xrp_pop_report(struct file *filp,
+			                struct xrp_report_buffer __user *p)
+{
+    	struct xvp_file *xvp_file = filp->private_data;
+        struct xvp *xvp = xvp_file->xvp;
+        struct xrp_dsp_cmd __iomem *cmd=xvp->comm;
+        struct xrp_report_ring_buffer  *ring_buffer = xvp->reporter->buffer_list;
+        void* report_buf;
+
+ /*******************if  report queue is empty ,return************************************************/
+        if((ring_buffer->WR == ring_buffer->RD))
+            return -EFAULT;
+
+
+        report_buf = &ring_buffer->data[ring_buffer->RD*xvp->reporter->buffer_size];
+        if(copy_to_user(p, report_buf, xvp->reporter->buffer_size))
+        {
+            pr_debug("%s: copy to user fail\n", __func__);
+            return -EFAULT;
+        }
+ /*******************if  report queue is full ,unblock************************************************/
+        if((ring_buffer->WR+1)%ring_buffer->max_item==ring_buffer->RD)
+        {
+            ring_buffer->RD=(ring_buffer->RD+1)%ring_buffer->max_item;
+            ring_buffer->is_full==false;
+            xrp_comm_write32(&cmd->report_id,0x0);
+            pr_debug("%s: unblock the report,RD:%d\n", __func__,ring_buffer->RD);
+        }
+        else
+        {
+            ring_buffer->RD=(ring_buffer->RD+1)%ring_buffer->max_item;
+        }
+
+        return 0;
 }
 static long xrp_map_phy_to_virt(phys_addr_t paddr,unsigned long size,__u64 *vaddr)
 {
@@ -786,7 +825,6 @@ static long xrp_map_phy_to_virt(phys_addr_t paddr,unsigned long size,__u64 *vadd
 		// else
         {
 				void __iomem *p = ioremap(paddr, size);
-				unsigned long rc;
 
 				if (!p) {
 					pr_debug("%s,couldn't ioremap %pap x 0x%08x\n",__func__,&paddr, (u32)size);
@@ -815,6 +853,7 @@ static long xrp_unmap_phy_to_virt(unsigned long *vaddr,phys_addr_t paddr,unsigne
 		*vaddr=NULL;
 		return 0;
 }
+
 static long xrp_ioctl_alloc_report(struct file *filp,
 			    struct xrp_ioctl_alloc __user *p)
 {
@@ -824,88 +863,77 @@ static long xrp_ioctl_alloc_report(struct file *filp,
 		struct xrp_ioctl_alloc xrp_ioctl_alloc;
 		struct xrp_dsp_cmd __iomem *cmd=xvp->comm;
 		unsigned long vaddr;
+        int  size;
 		long err;
 
-		pr_debug("%s: %p\n", __func__, p);
 		if (copy_from_user(&xrp_ioctl_alloc, p, sizeof(*p)))
 			return -EFAULT;
+
 		pr_debug("%s: virtAddr = %lx.size = %d, align = %x\n", __func__,
 		 		xrp_ioctl_alloc.addr,xrp_ioctl_alloc.size, 
 				xrp_ioctl_alloc.align);
-		// if(NULL == xrp_ioctl_alloc.addr)
-		// {
-		// 	return -EFAULT;
-		// }
+
 		xvp->reporter= kmalloc(sizeof(*(xvp->reporter)), GFP_KERNEL);
 		if (!xvp->reporter)
 			return -EFAULT;
 		xvp->reporter->fasync=NULL;
-		err = xrp_allocate(xvp_file->xvp->pool,
-			xrp_ioctl_alloc.size,
-			xrp_ioctl_alloc.align,
-			&xrp_allocation);
 
-		if (err)
-			return err;
-		xrp_allocation_queue(xvp_file, xrp_allocation);
-
-		vaddr = vm_mmap(filp, 0, xrp_allocation->size,
-							PROT_READ | PROT_WRITE, MAP_SHARED,
-							xrp_allocation_offset(xrp_allocation));
-		xrp_ioctl_alloc.addr=vaddr;		
-		xvp->reporter->buffer_phys = xrp_allocation->start;
-
-		if(xrp_map_phy_to_virt(xvp->reporter->buffer_phys,sizeof(__u32),&xvp->reporter->buffer_virt))
+		if (xrp_allocate(xvp_file->xvp->pool,xrp_ioctl_alloc.size,
+                            xrp_ioctl_alloc.align,&xrp_allocation))
+        {
+            goto One_Err;
+        }
+	    xrp_allocation_queue(xvp_file, xrp_allocation);
+        xvp->reporter->buffer_phys = xrp_allocation->start;
+        xvp->reporter->buffer_size = xrp_ioctl_alloc.size;
+		if(xrp_map_phy_to_virt(xvp->reporter->buffer_phys,xrp_ioctl_alloc.size,&xvp->reporter->buffer_virt))
 		{
-			pr_debug("%s: map to kernel virt fail\n", __func__);
-			kfree(xvp->reporter);
-			return -EFAULT;
+			pr_err("%s: map to kernel virt fail\n", __func__);
+			goto Two_Err;
 		}
 
+
+        size = sizeof(struct xrp_report_ring_buffer)+ xrp_ioctl_alloc.size*REPORT_QUEUE_NUM;
+        xvp->reporter->buffer_list = kmalloc(size, GFP_KERNEL);
+
+        if (xvp->reporter->buffer_list == NULL)
+			goto Two_Err;
+
+
+        xvp->reporter->buffer_list->WR=0;
+        xvp->reporter->buffer_list->RD=0;
+        xvp->reporter->buffer_list->is_full = false;
+        xvp->reporter->buffer_list->max_item = REPORT_QUEUE_NUM;
+        report_cnt =0;
 		xrp_comm_write32(&cmd->report_addr, 
 					xrp_translate_to_dsp(&xvp->address_map,xvp->reporter->buffer_phys+sizeof(__u32)));
+
 		unsigned int dsp_addr = xrp_comm_read32(&cmd->report_addr);		
 		pr_debug("%s: alloc_report buffer user virt:%llx,kernel virt:%lx, phys:%llx,dsp_addr:%x,size:%d\n", __func__,
 					vaddr,xvp->reporter->buffer_virt,xvp->reporter->buffer_phys,dsp_addr,xrp_allocation->size);
-		/*alloc report memory for DSP , alloc kernel memory for user get*/
-		// if(xrp_ioctl_alloc.size>XRP_DSP_CMD_INLINE_DATA_SIZE)
-		// {
 
-		// 	err = xrp_allocate(xvp_file->xvp->pool,
-		// 			xrp_ioctl_alloc.size,
-		// 			xrp_ioctl_alloc.align,
-		// 			&xrp_allocation);
-		// 	if (err)
-		// 		return err;
 
-		// 	// xrp_allocation_queue(xvp_file, xrp_allocation);
-		// 	xvp->reporter->buffer_phys = xrp_allocation->start;
-		// 	xrp_comm_write32(&cmd->report_addr, 
-		// 				xrp_translate_to_dsp(&xvp->address_map,xvp->reporter->buffer_phys));
-		// 	// vaddr = vm_mmap(filp, 0, xrp_allocation->size,
-		// 	// PROT_READ | PROT_WRITE, MAP_SHARED,
-		// 	// xrp_allocation_offset(xrp_allocation));
-		// 	// xrp_ioctl_alloc.addr=vaddr;
-		// 	pr_debug("%s: kernel bufdfer:%lx\n", __func__, xvp->reporter->buffer_phys);
-		// }
-		// else{
-		// 	xvp->reporter->buffer_phys = NULL;
-		// }
-        /*save the user addr ,which kernel copy the report to */
-		// xvp->reporter->user_buffer_virt = xrp_ioctl_alloc.addr;	
-		xvp->reporter->buffer_size = xrp_ioctl_alloc.size;
 		xrp_comm_write32(&cmd->report_buffer_size,xvp->reporter->buffer_size);
+		xrp_comm_write32(&cmd->report_paylad_size,xvp->reporter->buffer_size);
 		xrp_comm_write32(&cmd->report_status,XRP_DSP_REPORT_WORKING);
 		xrp_comm_write32(&cmd->report_id,0);
 		tasklet_init(&xvp->reporter->report_task,xrp_report_tasklet,(unsigned long)xvp);
 		if (copy_to_user(p, &xrp_ioctl_alloc, sizeof(*p))) {
-			vm_munmap(vaddr, xrp_ioctl_alloc.size);
-			kfree(xvp->reporter);
 			pr_debug("%s: copy to user fail\n", __func__);
-			return -EFAULT;
+			goto Thr_Err;
 		}
-		pr_debug("%s: alloc_report %lx end\n", __func__,xvp);
+
 	return 0;
+Thr_Err:
+    kfree(xvp->reporter->buffer_list);
+    xvp->reporter->buffer_list = NULL;
+Two_Err:
+    xrp_allocation_put(xrp_allocation);
+
+One_Err:
+    kfree(xvp->reporter);
+    xvp->reporter == NULL;
+    return -EFAULT;
 }
 
 static int xrp_report_fasync(int fd, struct file *filp, int on){
@@ -942,47 +970,22 @@ static long xrp_ioctl_release_report(struct file *filp,
 	struct vm_area_struct *vma;
 	unsigned long start;
 	struct xrp_dsp_cmd __iomem *cmd=xvp->comm;
+	struct xrp_allocation *xrp_allocation;
+
+    if(xvp->reporter==NULL)
+        return 0;
 
 	tasklet_kill(&xvp->reporter->report_task);
 	xrp_comm_write32(&cmd->report_status,XRP_DSP_REPORT_INVALID);
 
 	if (copy_from_user(&xrp_ioctl_alloc, p, sizeof(*p)))
-	return -EFAULT;
+	    return -EFAULT;
 
-	start = xrp_ioctl_alloc.addr;
-	pr_debug("%s: virt_addr = 0x%08lx\n", __func__, start);
+    xrp_allocation = xrp_allocation_dequeue(xvp_file,xvp->reporter->buffer_phys,xvp->reporter->buffer_size);
 
-    #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
-	down_read(&mm->mmap_sem);
-	#else
-	down_read(&mm->mmap_lock);
-	#endif
-	vma = find_vma(mm, start);
-
-	if (vma && vma->vm_file == filp &&
-		vma->vm_start <= start && start < vma->vm_end) {
-		size_t size;
-
-		start = vma->vm_start;
-		size = vma->vm_end - vma->vm_start;
-        #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
-		up_read(&mm->mmap_sem);
-		#else
-		up_read(&mm->mmap_lock);		
-		#endif
-		pr_debug("%s: 0x%lx x %zu\n", __func__, start, size);
-		vm_munmap(start, size);
-	}
-	else{
-		pr_debug("%s: no vma/bad vma for vaddr = 0x%08lx\n", __func__, start);
-        #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
-		up_read(&mm->mmap_sem);
-		#else
-		up_read(&mm->mmap_lock);		
-		#endif
-		return -EINVAL;
-	}
-
+    xrp_allocation_put(xrp_allocation);
+    if(xvp->reporter->buffer_list)
+        kfree(xvp->reporter->buffer_list);
 	xrp_report_fasync_release(filp);	
 	kfree(xvp->reporter);
 	xvp->reporter =NULL;
@@ -2402,20 +2405,21 @@ static struct xrp_dma_buf_item * xrp_search_dma_buf( struct list_head *list,int 
 }
 
 static long xrp_ioctl_dma_buf_release(struct file *filp,
-			                        int __user *p)
+			                       struct xrp_dma_buf __user *p)
 {
     int fd;
     struct xvp_file *xvp_file = filp->private_data;
 	struct xvp *xvp = xvp_file->xvp;
     struct dma_buf *dmabuf = NULL;
+    struct xrp_dma_buf  user_param;
     struct xrp_dma_buf_item *dma_buf_item=NULL;
     struct xrp_dma_buf_item *loop,*temp;
     
-    if (copy_from_user(&fd, p, sizeof(*p)))
+    if (copy_from_user(&user_param, p, sizeof(*p)))
     {
 		return -EFAULT;
     }
-
+    fd = user_param.fd;
     // dmabuf = dma_buf_get(fd);
     // spin_lock(&xrp_dma_buf_lock);
     // list_for_each_entry_safe(loop, temp, &xvp->dma_buf_list, link)
@@ -2436,7 +2440,7 @@ static long xrp_ioctl_dma_buf_release(struct file *filp,
     {
         return -EFAULT;
     }
-    
+    vm_munmap(user_param.addr , user_param.size);
     dma_buf_unmap_attachment(dma_buf_item->attachment, dma_buf_item->sgt, DMA_BIDIRECTIONAL);
     dma_buf_detach(dma_buf_item->dmabuf, dma_buf_item->attachment);
     dma_buf_put(dma_buf_item->dmabuf);
@@ -2520,11 +2524,15 @@ static long xvp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         break;
     case XRP_IOCTL_DMABUF_RELEASE:
         retval = xrp_ioctl_dma_buf_release(filp,
-                                    (int __user *)arg);
+                    ( struct xrp_dma_buf  __user *)arg);
         break;
     case XRP_IOCTL_DMABUF_SYNC:
         retval = xrp_ioctl_dma_buf_sync(filp,
                     (struct xrp_dma_buf __user *)arg);
+        break;
+    case XRP_IOCTL_POP_NEW_REPORT:
+         retval = xrp_pop_report(filp,
+                    (struct xrp_report_buffer __user *)arg);
         break;
 	default:
 		retval = -EINVAL;
@@ -2716,9 +2724,10 @@ static int xrp_boot_firmware(struct xvp *xvp)
             }
         }
         xrp_reset_dsp(xvp);
+
+	    xrp_release_dsp(xvp);
     }
 
-	xrp_release_dsp(xvp);
 //#endif
 	if (loopback < LOOPBACK_NOIO) {
 		ret = xrp_synchronize(xvp);
@@ -2754,6 +2763,8 @@ int xrp_runtime_suspend(struct device *dev)
 	struct xvp *xvp = dev_get_drvdata(dev);
 
 	xrp_halt_dsp(xvp);
+    /*****WR to make sure DSP is in idle*****/
+    udelay(1000);
     xrp_reset_dsp(xvp);
 	xvp_disable_dsp(xvp);
     // release_firmware(xvp->firmware);

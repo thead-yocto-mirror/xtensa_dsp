@@ -18,7 +18,7 @@
 
 #include "dsp_common.h"
 
-int log_level = CSI_DSP_LOG_INFO;
+int dsp_log_level = CSI_DSP_LOG_INFO;
 int pid = 0;
 
 
@@ -41,6 +41,6 @@ static int getLogLevel()
 
 void dsp_InitEnv()
 {
-    log_level = getLogLevel();
+    dsp_log_level = getLogLevel();
 
 }

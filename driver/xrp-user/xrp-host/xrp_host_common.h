@@ -95,11 +95,12 @@ struct xrp_report{
 
 	struct xrp_refcounted ref;
 	struct xrp_device *device;
-	struct xrp_report_list list;
-	
+	struct xrp_report_list list;	
 	void *report_buf;
 
 	int  buf_size;
+    xrp_thread report_thread;
+    int  process_sig;
 
 };
 

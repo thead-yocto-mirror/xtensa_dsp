@@ -45,6 +45,11 @@
 #define XRP_IOCTL_DMABUF_RELEASE   _IO(XRP_IOCTL_MAGIC, 9)
 
 #define XRP_IOCTL_DMABUF_SYNC  _IO(XRP_IOCTL_MAGIC, 10)
+
+#define XRP_IOCTL_POP_NEW_REPORT  _IO(XRP_IOCTL_MAGIC, 11)
+
+
+#define  SIG_REPORT    (SIGRTMIN+5)
 struct xrp_ioctl_alloc {
 	__u32 size;
 	__u32 align;

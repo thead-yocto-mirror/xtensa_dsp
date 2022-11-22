@@ -892,7 +892,9 @@ int csi_dsp_task_release_request(struct csi_sw_task_req*  req)
         {
             for(plane_idx =0 ;plane_idx<req->buffers[buf_idx].plane_count;plane_idx++)
             {
-                 xrp_release_dma_buf(task->instance->device,req->buffers[buf_idx].planes[plane_idx].fd,&status);
+                 xrp_release_dma_buf(task->instance->device,req->buffers[buf_idx].planes[plane_idx].fd,
+                                                            req->buffers[buf_idx].planes[plane_idx].buf_vir,
+                                                            req->buffers[buf_idx].planes[plane_idx].size,&status);
             }
         }
         else
@@ -1030,7 +1032,7 @@ int csi_dsp_task_create_buffer(void * task_ctx,struct csi_dsp_buffer * buffer)
                 err_2:
                     for(j=0;j<i;j++)
                     {
-                            xrp_release_dma_buf(task->instance->device,buffer->planes[i].fd,&status);
+                            xrp_release_dma_buf(task->instance->device,buffer->planes[i].fd,buffer->planes[i].buf_vir,buffer->planes[i].size,&status);
                     }
                     return -1;
          default:
@@ -1078,7 +1080,7 @@ int csi_dsp_task_free_buffer(void * task_ctx,struct csi_dsp_buffer * buffer)
          case CSI_DSP_BUF_TYPE_DMA_BUF_IMPORT:
                 for(i=0;i<buffer->plane_count;i++)
                 {
-                    xrp_release_dma_buf(task->instance->device,buffer->planes[i].fd,&status);
+                    xrp_release_dma_buf(task->instance->device,buffer->planes[i].fd,buffer->planes[i].buf_vir,buffer->planes[i].size,&status);
                     if(status != XRP_STATUS_SUCCESS)
                     {
                         DSP_PRINT(WARNING,"ERR DMA Buffrs(%d) Release fail\n",buffer->planes[i].fd);
@@ -1180,7 +1182,7 @@ int csi_dsp_request_add_buffer(struct csi_sw_task_req* req,struct csi_dsp_buffer
                 err_2:
                     for(j=0;j<i;j++)
                     {
-                        xrp_release_dma_buf(task->instance->device,buffer->planes[i].fd,&status);
+                        xrp_release_dma_buf(task->instance->device,buffer->planes[i].fd,buffer->planes[i].buf_vir,buffer->planes[i].size,&status);
                     }
                     return -1;
          case CSI_DSP_BUF_ALLOC_APP:
@@ -1267,10 +1269,10 @@ int csi_dsp_request_enqueue(struct csi_sw_task_req* req)
 		return -1;
     }
 
-    for(loop =0;loop<req->buffer_num;loop++)
-    {
-        csi_dsp_buf_flush(task->instance->device,&req->buffers[loop]);
-    }
+    // for(loop =0;loop<req->buffer_num;loop++)
+    // {
+    //     csi_dsp_buf_flush(task->instance->device,&req->buffers[loop]);
+    // }
 
 	xrp_enqueue_command(task->queue, req, sizeof(struct csi_sw_task_req),
 			    &event_item->req_status, sizeof(event_item->req_status),
@@ -1334,10 +1336,10 @@ struct csi_sw_task_req*  csi_dsp_request_dequeue(void *task_ctx)
     free(evts);
     free(item);
 
-    for(loop =0;loop<req->buffer_num;loop++)
-    {
-        csi_dsp_buf_flush(task->instance->device,&req->buffers[loop]);
-    }
+    // for(loop =0;loop<req->buffer_num;loop++)
+    // {
+    //     csi_dsp_buf_flush(task->instance->device,&req->buffers[loop]);
+    // }
 
     DSP_PRINT(DEBUG,"Req %d is deuque \n",req->request_id);
     return req;

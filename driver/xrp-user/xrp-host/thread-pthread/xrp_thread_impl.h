@@ -104,4 +104,8 @@ static inline int xrp_thread_detach(xrp_thread *thread)
 	return pthread_detach(*thread) == 0;
 }
 
+static inline int xrp_thread_cancel(xrp_thread *thread)
+{
+    return pthread_cancel(*thread) == 0;
+}
 #endif

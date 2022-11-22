@@ -50,9 +50,11 @@
 
 #define DSP_PRINT(level, ...) \
     { \
-        if (log_level >= CSI_DSP_LOG_##level) \
+        if (dsp_log_level >= CSI_DSP_LOG_##level) \
         { \
-            printf("CSI_DSP[%d] %s,(%s,%d): ", pid, #level,__FUNCTION__,__LINE__);  \
+            struct timeval ts; \
+            gettimeofday(&ts, 0); \
+            printf("[%ld.%06ld] CSI_DSP[%d] %s,(%s,%d): ",ts.tv_sec, ts.tv_usec,pid, #level,__FUNCTION__,__LINE__);  \
             printf(__VA_ARGS__); \
         } \
     }
@@ -83,7 +85,7 @@ typedef enum log_level
     CSI_DSP_LOG_MAX
 } csi_dsp_log_level;
 
-extern int log_level;
+extern int dsp_log_level;
 extern int pid;
 
 void dsp_InitEnv();

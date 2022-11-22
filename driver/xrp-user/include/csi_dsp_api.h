@@ -224,7 +224,7 @@ int csi_dsp_task_release_request(struct csi_sw_task_req* req);
 
 
 int csi_dsp_task_update_backend_buf(void *task_ctx,struct csi_dsp_task_be_para* config_para);
-int csi_dsp_test_config(void* dsp ,struct csi_dsp_ip_test_par* config_para,void* buf);
+// int csi_dsp_test_config(void* dsp ,struct csi_dsp_ip_test_par* config_para,void* buf);
 #ifdef __cplusplus
 }
 #endif

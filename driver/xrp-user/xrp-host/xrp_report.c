@@ -45,10 +45,9 @@ void xrp_process_report(struct xrp_report_list *list,void* data,unsigned int id)
 		(report_item->size&&!report_item->buf)){
 		return;
 	}
-	memcpy(report_item->buf,data,report_item->size);
-    int *ptr=report_item->buf;
+	// memcpy(report_item->buf,data,report_item->size);
   
-	report_item->fn(report_item->context,report_item->buf);
+	report_item->fn(report_item->context,data);
 }
 
 int xrp_add_report(struct xrp_report_list *list,

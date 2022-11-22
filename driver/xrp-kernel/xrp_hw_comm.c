@@ -97,7 +97,7 @@ int xrp_set_reset_reg(int dsp_id)
 	uint32_t old_value = __raw_readl(hw_drvdata->sys_regs+XRP_REG_RESET);
 	pr_debug("%s,reset reg:%x\n",__func__,old_value);
 	__raw_writel(old_value^bit_mask,hw_drvdata->sys_regs+XRP_REG_RESET);
-	udelay(10000);
+	udelay(100);
 	__raw_writel(old_value,hw_drvdata->sys_regs+XRP_REG_RESET);
 	mutex_unlock(&hw_drvdata->lock);
 

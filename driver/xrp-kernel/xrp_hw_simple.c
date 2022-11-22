@@ -525,10 +525,9 @@ static irqreturn_t irq_handler(int irq, void *dev_id)
 
 	if(is_expect_irq(hw))
 	{
+		ack_irq(hw);
 		ret = xrp_irq_handler(irq, hw->xrp);
 
-		if (ret == IRQ_HANDLED)
-			ack_irq(hw);
 
 	}
 	else{

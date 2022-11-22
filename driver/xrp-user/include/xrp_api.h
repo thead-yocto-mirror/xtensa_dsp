@@ -490,7 +490,7 @@ int xrp_release_reporter(struct xrp_device *device,struct xrp_report *report);
 void xrp_import_dma_buf(struct xrp_device *device, int fd,enum xrp_access_flags flag ,uint64_t *phy_addr,
                                 uint64_t *user_addr,size_t* size,enum xrp_status *status);
 
-void xrp_release_dma_buf(struct xrp_device *device, int fd,enum xrp_status *status);
+void xrp_release_dma_buf(struct xrp_device *device, int fd,uint64_t user_addr,size_t size,enum xrp_status *status);
 
 void xrp_flush_dma_buf(struct xrp_device *device, int fd,enum xrp_access_flags flag ,enum xrp_status *status);
 /*!

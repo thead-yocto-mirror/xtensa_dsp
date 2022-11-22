@@ -72,14 +72,10 @@ TEST_GROUP(DspPostProcessTestDmaBuf)
         return -1;
     }
     printf("%s,export dma buf @fd:%x\n",__FUNCTION__,params->fd);
-    // if(VMEM_mmap(mem_allocor,params))
-    // {
-    //     return -1;
-    // }
-    // printf("%s,mmap dma buf addr:%lx\n",__FUNCTION__,params->vir_address);
     return 0;
 
   }  
+  
   int releaseDmaBuffer(VmemParams *params)
   {
       VMEM_free(mem_allocor, params);
