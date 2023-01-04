@@ -14,6 +14,34 @@ struct message{
 	char message[PAYLOAD_SIZE];
 };
 
+static void isp_algo_result_handler(void *context,void *data)
+{
+    csi_dsp_report_item_t *msg=(csi_dsp_report_item_t *)data;
+    printf("report recived:%x\n",msg->type);
+    switch(msg->type)
+    {
+        case CSI_DSP_REPORT_ISP_ERR:
+                printf("ISP error:%d\n",msg->data[0]);
+            break;
+        case CSI_DSP_REPORT_RY_ERR:
+                printf("Post ISP error\n",msg->data[0]);
+            break;
+        case CSI_DSP_REPORT_ALGO_ERR:
+                printf("algo err\n");
+            break;
+        case CSI_DSP_REPORT_VI_PRE_ERR:
+            break;
+        case  CSI_DSP_REPORT_RESULT:
+            break;
+        case CSI_DSP_REPORT_HEARTBEAT_ERR:
+                 printf("heartbeat not detect\n");
+            break;
+        default:
+            break;
+           
+    }
+
+}
 // void vi_callback( void *context,void * data)
 // {}
 int main(int argc, char *argv[])

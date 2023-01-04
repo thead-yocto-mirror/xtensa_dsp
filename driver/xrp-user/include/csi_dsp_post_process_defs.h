@@ -21,7 +21,7 @@
  *
  * General  properties:
  * 1. Post porcess define data and strcut, visiable for APP
- * 2. user define data shared bedtween DSP ans host
+ * 2. user define data shared between DSP and host
  */
 
 #ifndef _CSI_DSP_POST_DEFS_H
@@ -36,8 +36,6 @@ extern "C" {
 #endif
 #define CSI_DSP_MAX_BUFFER   8
 typedef uint8_t dsp_id_t;
-
-
 
 typedef enum csi_dsp_img_fmt{
 	CSI_DSP_IMG_FMT_RAW8 =0,
@@ -72,7 +70,6 @@ enum buffer_property{
 };
 
 struct csi_dsp_plane {
-
 	int      fd;
     uint32_t stride;         /* if buffer type is image */
 	uint32_t size;
@@ -99,7 +96,7 @@ struct csi_dsp_buffer {
 	struct csi_dsp_plane planes[3];
 };
  struct csi_dsp_algo_config_par{
-	int16_t  algo_id;
+	int16_t   algo_id;
     int       task_id;
     uint64_t  algo_ptr;
     uint64_t  sett_ptr;

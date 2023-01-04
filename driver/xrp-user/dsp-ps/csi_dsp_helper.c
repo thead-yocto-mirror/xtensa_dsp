@@ -84,34 +84,6 @@ int csi_dsp_disable_heartbeat_check()
     return setitimer(ITIMER_REAL,&val,NULL);
 
 }
-void isp_algo_result_handler(void *context,void *data)
-{
-    s_cmd_t *msg=(s_cmd_t *)data;
-    printf("report recived:%x\n",msg->cmd);
-    switch(msg->cmd)
-    {
-        case CSI_DSP_REPORT_ISP_ERR:
-                printf("ISP error:%d\n",msg->data[0]);
-            break;
-        case CSI_DSP_REPORT_RY_ERR:
-                printf("Post ISP error\n",msg->data[0]);
-            break;
-        case CSI_DSP_REPORT_ALGO_ERR:
-                printf("algo err\n");
-            break;
-        case CSI_DSP_REPORT_VI_PRE_ERR:
-            break;
-        case  CSI_DSP_REPORT_RESULT:
-            break;
-        case CSI_DSP_REPORT_HEARTBEAT_ERR:
-                 printf("heartbeat not detect\n");
-            break;
-        default:
-            break;
-           
-    }
-
-}
 
 
 int csi_dsp_buf_flush( struct xrp_device *device,struct csi_dsp_buffer *buffers)

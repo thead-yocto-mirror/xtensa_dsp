@@ -38,7 +38,7 @@ extern "C" {
 #define  MAX_REPORT_SIZE  256
 
 #define  CSI_DSP_HW_TASK_EXTRA_BUF_START_INDEX  2
-typedef struct {
+typedef struct _sisp_config_par{
 	uint16_t id;
 	uint16_t hor;
 	uint16_t ver;
@@ -64,22 +64,7 @@ typedef  struct vipre_config_par{
 	uint64_t buffer_addr[12];
 }vipre_config_par_t;
 
-typedef struct {
-	uint16_t algo_id;
-	float gamma;  // float鍙傛暟
-	float coef1;
-	float coef2;
-	float coef3;
-	float coef4;
-	short beta;			// short鍨嬪弬鏁�
-	short beta1;
-	short beta2;
-	short beta3;
-	short beta4;
-}salgo_config_par;
-
-
-typedef enum{
+typedef enum csi_dsp_report{
   CSI_DSP_REPORT_NORMAL,
   CSI_DSP_REPORT_RESULT,
   CSI_DSP_REPORT_RESULT_WITH_EXRA_PARAM,
@@ -100,19 +85,13 @@ typedef enum{
   CSI_DSP_REPORT_MAX
 }csi_dsp_report_e;
 
-typedef struct dsp_frame{
-  uint64_t p_frame_buff[3];
-  uint32_t frame_buff_size[3];
-  int32_t  frame_width;
-  int32_t  frame_height;
-  int32_t  frame_pitch;
-  uint8_t  pixel_res;
-  uint8_t  num_channels;
-  int8_t   fmt;
-}dsp_frame_t;
-
-
-
+typedef struct csi_dsp_report_item{
+    csi_dsp_report_e type;
+    union{
+        char data[MAX_REPORT_SIZE];
+        struct csi_dsp_buffer buf;
+    };
+}csi_dsp_report_item_t;
 typedef enum csi_dsp_task_mode{
     CSI_DSP_TASK_SW_TO_SW =0x1<<0,  /*SW Queue to handle in / data/exception  */
     CSI_DSP_TASK_SW_TO_HW =0x1<<1,  /*SW Queue to handle in and exception / Report handlere exception,HW handl out*/
@@ -125,40 +104,6 @@ typedef enum csi_dsp_task_mode{
 //#define  CSI_DSP_TASK_SW  (CSI_DSP_TASK_SW_TO_HW|CSI_DSP_TASK_SW_TO_SW)
 //#define  CSI_DSP_TASK_HW  (CSI_DSP_TASK_HW_TO_SW|CSI_DSP_TASK_HW_TO_HW)
 
-typedef enum csi_dsp_status{
-    CSI_DSP_ERR_ILLEGAL_PARAM = -100,
-    CSI_DSP_TASK_NOT_VALID,
-    CSI_DSP_TASK_ALLOC_FAIL,
-    CSI_DSP_TASK_ADD_TO_SCHEDULER_FAIL,
-    CSI_DSP_TASK_ALREADY_RUNNING,
-    CSI_DSP_TASK_START_FAIL,
-    CSI_DSP_REPORTER_NOT_INIT,
-    CSI_DSP_FE_NOT_VALID,
-    CSI_DSP_FE_CONFIG_FAIL,
-    CSI_DSP_BE_CONFIG_FAIL,
-    CSI_DSP_BE_NOT_VALID,
-    CSI_DSP_ALGO_INVALID,
-    CSI_DSP_ALGO_ERR,
-    CSI_DSP_FE_ERR,
-    CSI_DSP_BE_ERR,
-    CSI_DSP_BUF_TYPE_ERR,
-    CSI_DSP_ALGO_LOAD_FAIL,
-    CSI_DSP_MALLO_FAIL,
-    CSI_DSP_ALGO_BUF_FAIL,
-    CSI_DSP_FAIL,
-    CSI_DSP_OK = 0,
-}csi_dsp_status_e;
-
-struct csi_dsp_task_create_req{
-    csi_dsp_task_mode_e type;
-    int priority;
-};
-
-
-
-struct csi_dsp_task_comm_resp{
-    csi_dsp_status_e status;
-};
 enum csi_dsp_fe_type{
     CSI_DSP_FE_TYPE_CPU,
     CSI_DSP_FE_TYPE_ISP,
@@ -179,21 +124,21 @@ enum csi_dsp_task_cfg{
 
 };
 
-struct csi_dsp_task_fe_para{
+typedef struct csi_dsp_task_fe_para{
     enum csi_dsp_fe_type frontend_type;
     int task_id;
     union{
             sisp_config_par isp_param;
             vipre_config_par_t vipre_param;
     };
-};
+}csi_dsp_task_fe_para_t;
 typedef struct _sw_be_config_par{
     int num_buf;
     struct csi_dsp_buffer bufs[1];
 
 }sw_be_config_par;
 
-struct csi_dsp_task_be_para{
+typedef struct csi_dsp_task_be_para{
     enum csi_dsp_be_type backend_type;
     int task_id;
     union{
@@ -201,15 +146,8 @@ struct csi_dsp_task_be_para{
             sw_be_config_par sw_param;
     };
 
-};
+}csi_dsp_task_be_para_t;
 
-typedef struct csi_dsp_report_item{
-    csi_dsp_report_e type;
-    union{
-        char data[MAX_REPORT_SIZE];
-        struct csi_dsp_buffer buf;
-    };
-}csi_dsp_report_item_t;
 
 typedef struct csi_dsp_algo_load_req{
 	uint16_t  algo_id;
@@ -217,16 +155,6 @@ typedef struct csi_dsp_algo_load_req{
     uint64_t  algo_ptr;
 }csi_dsp_algo_load_req_t;
 
-typedef struct csi_dsp_algo_load_resp{
-	csi_dsp_status_e status;
-	uint16_t  algo_id;
-	uint16_t  buf_desc_num;
-	uint16_t  info_prop_des_num;
-	uint16_t  set_prop_des_num;
-}csi_dsp_algo_load_resp_t;
-
-
-void isp_algo_result_handler(void *context,void *data);
 
 #ifdef __cplusplus
 }

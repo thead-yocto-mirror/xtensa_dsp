@@ -110,6 +110,47 @@ struct csi_dsp_task_start_req{
     char task_ns[TASK_NAME_LINE];
 };
 
+typedef enum csi_dsp_status{
+    CSI_DSP_ERR_ILLEGAL_PARAM = -100,
+    CSI_DSP_TASK_NOT_VALID,
+    CSI_DSP_TASK_ALLOC_FAIL,
+    CSI_DSP_TASK_ADD_TO_SCHEDULER_FAIL,
+    CSI_DSP_TASK_ALREADY_RUNNING,
+    CSI_DSP_TASK_START_FAIL,
+    CSI_DSP_REPORTER_NOT_INIT,
+    CSI_DSP_FE_NOT_VALID,
+    CSI_DSP_FE_CONFIG_FAIL,
+    CSI_DSP_BE_CONFIG_FAIL,
+    CSI_DSP_BE_NOT_VALID,
+    CSI_DSP_ALGO_INVALID,
+    CSI_DSP_ALGO_ERR,
+    CSI_DSP_FE_ERR,
+    CSI_DSP_BE_ERR,
+    CSI_DSP_BUF_TYPE_ERR,
+    CSI_DSP_ALGO_LOAD_FAIL,
+    CSI_DSP_MALLO_FAIL,
+    CSI_DSP_ALGO_BUF_FAIL,
+    CSI_DSP_FAIL,
+    CSI_DSP_OK = 0,
+}csi_dsp_status_e;
+
+struct csi_dsp_task_create_req{
+    csi_dsp_task_mode_e type;
+    int priority;
+};
+
+typedef struct csi_dsp_algo_load_resp{
+	csi_dsp_status_e status;
+	uint16_t  algo_id;
+	uint16_t  buf_desc_num;
+	uint16_t  info_prop_des_num;
+	uint16_t  set_prop_des_num;
+}csi_dsp_algo_load_resp_t;
+
+struct csi_dsp_task_comm_resp{
+    csi_dsp_status_e status;
+};
+
 struct csi_dsp_task_create_resp{
 
     csi_dsp_status_e status;
@@ -129,15 +170,6 @@ struct csi_dsp_ip_test_par{
     int  result_buf_size;
 };
 
-//  struct csi_dsp_algo_config_par{
-// 	uint16_t algo_id;
-//     char* algo;
-//     union
-//     {
-//         float  gam_coef[4];
-//         short  beta_coef[4];
-//     };
-// };
 #ifdef __cplusplus
 }
 #endif
