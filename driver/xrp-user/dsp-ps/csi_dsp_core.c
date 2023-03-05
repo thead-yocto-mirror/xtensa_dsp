@@ -59,52 +59,6 @@ int csi_dsp_cmd_send(const struct xrp_queue *queue,int cmd_type,void * cmd_paylo
 
 }
 
-
-/*********************************/
-static int dsp_register_report_item_to_dsp(struct csi_dsp_task_handler *task)
-{
-    int resp =0;
-    struct report_config_msg config;
-    if(!task || task->report_id<0 || !task->instance || !task->instance->comm_queue)
-    {
-        DSP_PRINT(ERROR,"param check fail\n");
-        return -1;
-    }
-    config.report_id=task->report_id;
-    memcpy(config.task,task->task_ns,TASK_NAME_LINE);
-    if(csi_dsp_cmd_send(task->instance->comm_queue,PS_CMD_REPORT_CONFIG,&config,sizeof(struct report_config_msg),&resp,sizeof(resp),NULL))
-    {
-        DSP_PRINT(ERROR,"register_report_item_to_dsp fail\n");
-        return -1;
-    }
-    return 0;
-}
-
-// int csi_dsp_register_report_fix_id(struct csi_dsp_task_handler *task,
-//                             int (*cb)(void*context,void*data),
-//                             void* context,
-//                             size_t data_size)
-// {
-//     if(task->report_id<0)
-//     {
-//         printf("report id is invalid\n");
-//         return -1;
-//     }
-//     if(xrp_add_report_item_with_id(task->instance->report_impl,
-// 								        cb,task->report_id,context,data_size)<0)
-//     {
-//         return -1;
-//     }
-//     if(dsp_register_report_item_to_dsp(task))
-//     {
-//         return -1;
-//     }
-//     printf("new reprot %d is created and register to DSP\n",task->report_id);
-//     return 0;
-
-// }
-
-
 int csi_dsp_delete_instance(void* dsp)
 {   
     if(!dsp)
@@ -711,7 +665,7 @@ int csi_dsp_task_start(void *task_ctx)
         DSP_PRINT(ERROR,"csi_dsp_task_start resp due to %d\n",resp);
         return -1;
     }
-    DSP_PRINT(INFO,"task start sucessful!\n",task->task_id);
+    DSP_PRINT(INFO,"task:%d start sucessful!\n",task->task_id);
     return 0;
 }
 
@@ -734,8 +688,9 @@ int csi_dsp_task_stop(void *task_ctx)
     }
     if(resp != CSI_DSP_OK)
     {
-        printf("csi_dsp_task_start fail due to %d\n",resp);
+         DSP_PRINT(ERROR,"csi_dsp_task_start fail due to %d\n",resp);
     }
+    DSP_PRINT(INFO,"task:%d stop!\n",task->task_id);
     return 0;
 
 }

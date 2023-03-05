@@ -86,7 +86,7 @@ TEST_GROUP(DspPostProcessTestBasic)
         {
             
             csi_dsp_task_release_request(req);
-            FAIL_TEST("Add buffer:%d\n");
+            FAIL_TEST("Add buffer fail\n");
         }
 
         int *buf;
@@ -134,10 +134,23 @@ TEST_GROUP(DspPostProcessTestBasic)
             printf("plane：%d, buf2 data:%d\n",j,buf[0]);
         }
 
+        struct setting{
+            int with;
+            int height;
+        }setting_config;
+
+        setting_config.height = with;
+        setting_config.with =height;
+        if(csi_dsp_request_set_property(req,&setting_config,sizeof(setting_config)))
+        {
+            csi_dsp_task_release_request(req);
+            FAIL_TEST("set property fail\n");
+        }
+
         if(csi_dsp_request_enqueue(req))
         {
             csi_dsp_task_release_request(req);
-            FAIL_TEST("Add buffer:%d\n");
+            FAIL_TEST("Add buffer fail\n");
         }
         gettimeofday(&time_enqueue, 0);
         req = csi_dsp_request_dequeue(task);

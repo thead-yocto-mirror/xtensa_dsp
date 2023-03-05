@@ -79,25 +79,37 @@ TEST(DspViEnhanceProcessTest,Isp2Dsp2RyProcessTestBasic)
 		FAIL_TEST("reporter create fail\n");
 	}
 	struct csi_dsp_task_fe_para config_params;
-	
-		config_params.frontend_type = CSI_DSP_FE_TYPE_ISP;
-		config_params.task_id = -1;
-		config_params.isp_param.id=0;
-        config_params.isp_param.hor=640;
-        config_params.isp_param.ver=480;
-        config_params.isp_param.data_fmt=CSI_DSP_IMG_FMT_RAW12_ALGIN;
-        config_params.isp_param.line_in_entry=640*2;
-        config_params.isp_param.line_stride=640*2;
-        config_params.isp_param.buffer_size=640*2*16*2;
-        config_params.isp_param.buffer_addr=0xb0000000;
 
-	if(csi_dsp_task_config_frontend(vi_task,&config_params))
+    if(csi_dsp_task_get_frontend(vi_task,&config_params))
+    {
+        FAIL_TEST("get isp config fail\n");
+    }
+
+    config_params.frontend_type = CSI_DSP_FE_TYPE_ISP;
+    config_params.task_id = -1;
+    config_params.isp_param.id=0;
+    config_params.isp_param.hor=640;
+    config_params.isp_param.ver=480;
+    config_params.isp_param.data_fmt=CSI_DSP_IMG_FMT_RAW12_ALGIN;
+    config_params.isp_param.line_in_entry=640*2;
+    config_params.isp_param.line_stride=640*2;
+    config_params.isp_param.buffer_size=640*2*16*2;
+    config_params.isp_param.buffer_addr=0xb0000000;
+
+
+    if(csi_dsp_task_config_frontend(vi_task,&config_params))
 	{
 		FAIL_TEST("isp config fail\n");
 	}
 
 	struct csi_dsp_task_be_para post_config;
 
+    if(csi_dsp_task_get_backend(vi_task,&post_config))
+    {
+        FAIL_TEST("get post-isp config fail\n");
+    }
+
+    
     post_config.backend_type = CSI_DSP_BE_TYPE_POST_ISP;
     post_config.task_id = -1;
 
